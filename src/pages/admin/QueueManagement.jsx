@@ -7,7 +7,7 @@ import { Button } from '../../components/ui/Button';
 import { Users, ArrowRight, Clock, Activity } from 'lucide-react';
 
 const QueueManagement = () => {
-    const { queue, updateQueueStatus } = useClinic();
+    const { queue, updateQueueStatus, searchQuery } = useClinic();
     const location = useLocation();
     const [highlightId, setHighlightId] = useState(null);
 
@@ -18,8 +18,11 @@ const QueueManagement = () => {
         }
     }, [location.state]);
 
-    // Filter only active queues (not completed)
-    const activeQueue = queue.filter(q => q.status !== 'completed');
+    // Filter only active queues (not completed) and match search query
+    const activeQueue = queue.filter(q =>
+        q.status !== 'completed' &&
+        q.patientName.toLowerCase().includes(searchQuery.toLowerCase())
+    );
 
     const getStatusBadge = (status) => {
         switch (status) {
@@ -67,8 +70,8 @@ const QueueManagement = () => {
                         <Card
                             key={item.id}
                             className={`flex flex-col md:flex-row md:items-center justify-between p-5 transition-all duration-500 ${highlightId === item.patientId
-                                    ? 'bg-yellow-50 border-yellow-200 shadow-md ring-1 ring-yellow-200'
-                                    : 'hover:border-primary-200 hover:shadow-md'
+                                ? 'bg-yellow-50 border-yellow-200 shadow-md ring-1 ring-yellow-200'
+                                : 'hover:border-primary-200 hover:shadow-md'
                                 }`}
                         >
                             <div className="flex items-start gap-4 mb-4 md:mb-0">

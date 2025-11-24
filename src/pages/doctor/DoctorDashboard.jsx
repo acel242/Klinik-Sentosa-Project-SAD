@@ -7,13 +7,18 @@ import { Badge } from '../../components/ui/Badge';
 import { Users, Clock, Calendar, ArrowRight, Activity, CheckCircle } from 'lucide-react';
 
 const DoctorDashboard = () => {
-    const { queue, patients, examinations, updateQueueStatus } = useClinic();
+    const { queue, patients, examinations, updateQueueStatus, searchQuery } = useClinic();
     const navigate = useNavigate();
 
     // Filter for today's data
     const today = new Date().toISOString().split('T')[0];
 
-    const waitingQueue = queue.filter(q => q.status === 'waiting');
+    const waitingQueue = queue.filter(q => {
+        const isWaiting = q.status === 'waiting';
+        const patient = patients.find(p => p.id === q.patientId);
+        const matchesSearch = patient?.name.toLowerCase().includes(searchQuery.toLowerCase());
+        return isWaiting && matchesSearch;
+    });
     const completedToday = examinations.filter(e => e.date.startsWith(today)).length;
     const totalPatientsToday = patients.filter(p => p.registeredAt.startsWith(today)).length;
 

@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
+import { supabase } from '../lib/supabaseClient';
+
 const ClinicContext = createContext();
-const API_URL = 'http://localhost:3000';
 
 export const useClinic = () => {
     const context = useContext(ClinicContext);
@@ -20,6 +21,7 @@ export const ClinicProvider = ({ children }) => {
     const [transactions, setTransactions] = useState([]);
     const [medicines, setMedicines] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [searchQuery, setSearchQuery] = useState('');
 
     // Check for persisted login
     useEffect(() => {
@@ -30,23 +32,31 @@ export const ClinicProvider = ({ children }) => {
         setLoading(false);
     }, []);
 
-    // Fetch data on mount (and periodically/on change ideally, but simple fetch for now)
+    // Fetch data
     const fetchData = async () => {
         try {
-            const [p, q, e, pr, t, m] = await Promise.all([
-                fetch(`${API_URL}/patients`).then(res => res.json()),
-                fetch(`${API_URL}/queue`).then(res => res.json()),
-                fetch(`${API_URL}/examinations`).then(res => res.json()),
-                fetch(`${API_URL}/prescriptions`).then(res => res.json()),
-                fetch(`${API_URL}/transactions`).then(res => res.json()),
-                fetch(`${API_URL}/medicines`).then(res => res.json()),
+            const [
+                { data: p },
+                { data: q },
+                { data: e },
+                { data: pr },
+                { data: t },
+                { data: m }
+            ] = await Promise.all([
+                supabase.from('patients').select('*'),
+                supabase.from('queue').select('*'),
+                supabase.from('examinations').select('*'),
+                supabase.from('prescriptions').select('*'),
+                supabase.from('transactions').select('*'),
+                supabase.from('medicines').select('*'),
             ]);
-            setPatients(p);
-            setQueue(q);
-            setExaminations(e);
-            setPrescriptions(pr);
-            setTransactions(t);
-            setMedicines(m);
+
+            if (p) setPatients(p);
+            if (q) setQueue(q);
+            if (e) setExaminations(e);
+            if (pr) setPrescriptions(pr);
+            if (t) setTransactions(t);
+            if (m) setMedicines(m);
         } catch (error) {
             console.error("Failed to fetch data", error);
         }
@@ -61,9 +71,15 @@ export const ClinicProvider = ({ children }) => {
     // Auth Actions
     const login = async (username, password) => {
         try {
-            const res = await fetch(`${API_URL}/users?username=${username}&password=${password}`);
-            const users = await res.json();
-            if (users.length > 0) {
+            const { data: users, error } = await supabase
+                .from('users')
+                .select('*')
+                .eq('username', username)
+                .eq('password', password);
+
+            if (error) throw error;
+
+            if (users && users.length > 0) {
                 const userData = users[0];
                 setUser(userData);
                 localStorage.setItem('user', JSON.stringify(userData));
@@ -88,11 +104,8 @@ export const ClinicProvider = ({ children }) => {
         const newPatient = { ...patientData, id: Date.now().toString(), registeredAt: new Date().toISOString() };
 
         // 1. Add to Patients
-        await fetch(`${API_URL}/patients`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newPatient)
-        });
+        const { error: pError } = await supabase.from('patients').insert([newPatient]);
+        if (pError) console.error("Error adding patient", pError);
 
         // 2. Add to Queue
         const queueItem = {
@@ -103,32 +116,27 @@ export const ClinicProvider = ({ children }) => {
             joinedAt: new Date().toISOString(),
         };
 
-        await fetch(`${API_URL}/queue`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(queueItem)
-        });
+        const { error: qError } = await supabase.from('queue').insert([queueItem]);
+        if (qError) console.error("Error adding to queue", qError);
 
         fetchData(); // Refresh data
     };
 
     const updateQueueStatus = async (queueId, status) => {
-        await fetch(`${API_URL}/queue/${queueId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status })
-        });
+        const { error } = await supabase
+            .from('queue')
+            .update({ status })
+            .eq('id', queueId);
+
+        if (error) console.error("Error updating queue", error);
         fetchData();
     };
 
     const addExamination = async (exam) => {
         const newExam = { ...exam, id: Date.now().toString(), date: new Date().toISOString() };
 
-        await fetch(`${API_URL}/examinations`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newExam)
-        });
+        const { error } = await supabase.from('examinations').insert([newExam]);
+        if (error) console.error("Error adding examination", error);
 
         // Move patient to payment regardless of prescription
         const queueItem = queue.find(q => q.patientId === exam.patientId && q.status === 'examining');
@@ -142,11 +150,8 @@ export const ClinicProvider = ({ children }) => {
     const addPrescription = async (prescription) => {
         const newPrescription = { ...prescription, id: Date.now().toString(), status: 'pending' };
 
-        await fetch(`${API_URL}/prescriptions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newPrescription)
-        });
+        const { error } = await supabase.from('prescriptions').insert([newPrescription]);
+        if (error) console.error("Error adding prescription", error);
 
         // Deduct stock
         for (const med of prescription.medicines) {
@@ -161,11 +166,12 @@ export const ClinicProvider = ({ children }) => {
     };
 
     const completePrescription = async (prescriptionId) => {
-        await fetch(`${API_URL}/prescriptions/${prescriptionId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: 'completed' })
-        });
+        const { error } = await supabase
+            .from('prescriptions')
+            .update({ status: 'completed' })
+            .eq('id', prescriptionId);
+
+        if (error) console.error("Error completing prescription", error);
 
         const prescription = prescriptions.find(p => p.id === prescriptionId);
         if (prescription) {
@@ -179,11 +185,8 @@ export const ClinicProvider = ({ children }) => {
     const processPayment = async (payment) => {
         const newTransaction = { ...payment, id: Date.now().toString(), date: new Date().toISOString() };
 
-        await fetch(`${API_URL}/transactions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newTransaction)
-        });
+        const { error } = await supabase.from('transactions').insert([newTransaction]);
+        if (error) console.error("Error processing payment", error);
 
         const queueItem = queue.find(q => q.patientId === payment.patientId && q.status === 'payment');
         if (queueItem) {
@@ -202,27 +205,28 @@ export const ClinicProvider = ({ children }) => {
 
     // Medicine Actions
     const addMedicine = async (medicine) => {
-        await fetch(`${API_URL}/medicines`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...medicine, id: Date.now().toString() })
-        });
+        const { error } = await supabase.from('medicines').insert([{ ...medicine, id: Date.now().toString() }]);
+        if (error) console.error("Error adding medicine", error);
         fetchData();
     };
 
     const updateMedicine = async (id, updates) => {
-        await fetch(`${API_URL}/medicines/${id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(updates)
-        });
+        const { error } = await supabase
+            .from('medicines')
+            .update(updates)
+            .eq('id', id);
+
+        if (error) console.error("Error updating medicine", error);
         fetchData();
     };
 
     const deleteMedicine = async (id) => {
-        await fetch(`${API_URL}/medicines/${id}`, {
-            method: 'DELETE'
-        });
+        const { error } = await supabase
+            .from('medicines')
+            .delete()
+            .eq('id', id);
+
+        if (error) console.error("Error deleting medicine", error);
         fetchData();
     };
 
@@ -245,7 +249,9 @@ export const ClinicProvider = ({ children }) => {
         processPayment,
         addMedicine,
         updateMedicine,
-        deleteMedicine
+        deleteMedicine,
+        searchQuery,
+        setSearchQuery
     };
 
     return (

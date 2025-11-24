@@ -6,7 +6,7 @@ import { Badge } from '../../components/ui/Badge';
 import { FileText } from 'lucide-react';
 
 const PatientHistory = () => {
-    const { examinations } = useClinic();
+    const { examinations, searchQuery } = useClinic();
     const location = useLocation();
     const navigate = useNavigate();
     const [filterId, setFilterId] = useState(null);
@@ -17,9 +17,11 @@ const PatientHistory = () => {
         }
     }, [location.state]);
 
-    const filteredExaminations = filterId
-        ? examinations.filter(e => e.patientId === filterId)
-        : examinations;
+    const filteredExaminations = examinations.filter(e => {
+        const matchesFilter = filterId ? e.patientId === filterId : true;
+        const matchesSearch = e.patientName.toLowerCase().includes(searchQuery.toLowerCase());
+        return matchesFilter && matchesSearch;
+    });
 
     const clearFilter = () => {
         setFilterId(null);
