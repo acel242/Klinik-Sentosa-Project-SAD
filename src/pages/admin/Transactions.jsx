@@ -6,7 +6,7 @@ import { Badge } from '../../components/ui/Badge';
 import { FileText, TrendingUp, Filter, Calendar, CreditCard } from 'lucide-react';
 
 const Transactions = () => {
-    const { transactions } = useClinic();
+    const { transactions, searchQuery } = useClinic();
     const location = useLocation();
     const navigate = useNavigate();
     const [filterId, setFilterId] = useState(null);
@@ -17,9 +17,11 @@ const Transactions = () => {
         }
     }, [location.state]);
 
-    const filteredTransactions = filterId
-        ? transactions.filter(t => t.patientId === filterId)
-        : transactions;
+    const filteredTransactions = transactions.filter(t => {
+        const matchesFilter = filterId ? t.patientId === filterId : true;
+        const matchesSearch = t.patientName.toLowerCase().includes(searchQuery.toLowerCase());
+        return matchesFilter && matchesSearch;
+    });
 
     const clearFilter = () => {
         setFilterId(null);

@@ -8,16 +8,15 @@ import { Badge } from '../../components/ui/Badge';
 import { Package, Plus, AlertTriangle, Search, Edit2, Save, X } from 'lucide-react';
 
 const Inventory = () => {
-    const { medicines, updateMedicineStock, addMedicine } = useClinic();
+    const { medicines, updateMedicineStock, addMedicine, searchQuery } = useClinic();
     const { addToast } = useToast();
-    const [searchTerm, setSearchTerm] = useState('');
     const [editingId, setEditingId] = useState(null);
     const [editStock, setEditStock] = useState('');
     const [isAdding, setIsAdding] = useState(false);
     const [newMedicine, setNewMedicine] = useState({ name: '', stock: '', unit: '', price: '' });
 
     const filteredMedicines = medicines.filter(m =>
-        m.name.toLowerCase().includes(searchTerm.toLowerCase())
+        m.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     const handleUpdateStock = async (id) => {
@@ -93,15 +92,7 @@ const Inventory = () => {
 
             {/* Search and List */}
             <Card>
-                <div className="mb-6 relative">
-                    <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary-400" />
-                    <Input
-                        placeholder="Cari nama obat..."
-                        className="pl-10"
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
-                    />
-                </div>
+
 
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">

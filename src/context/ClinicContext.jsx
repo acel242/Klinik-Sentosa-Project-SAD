@@ -21,6 +21,7 @@ export const ClinicProvider = ({ children }) => {
     const [transactions, setTransactions] = useState([]);
     const [medicines, setMedicines] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [searchQuery, setSearchQuery] = useState('');
 
     // Check for persisted login
     useEffect(() => {
@@ -248,7 +249,9 @@ export const ClinicProvider = ({ children }) => {
         processPayment,
         addMedicine,
         updateMedicine,
-        deleteMedicine
+        deleteMedicine,
+        searchQuery,
+        setSearchQuery
     };
 
     return (
