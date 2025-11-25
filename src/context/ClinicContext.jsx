@@ -101,7 +101,7 @@ export const ClinicProvider = ({ children }) => {
 
     // Data Actions
     const addPatient = async (patientData) => {
-        const newPatient = { ...patientData, registeredAt: new Date().toISOString() };
+        const newPatient = { ...patientData, id: crypto.randomUUID(), registeredAt: new Date().toISOString() };
 
         // 1. Add to Patients
         const { data: savedPatient, error: pError } = await supabase
@@ -114,6 +114,7 @@ export const ClinicProvider = ({ children }) => {
 
         // 2. Add to Queue
         const queueItem = {
+            id: crypto.randomUUID(),
             patientId: savedPatient.id,
             patientName: savedPatient.name,
             status: 'waiting',
@@ -137,7 +138,7 @@ export const ClinicProvider = ({ children }) => {
     };
 
     const addExamination = async (exam) => {
-        const newExam = { ...exam, date: new Date().toISOString() };
+        const newExam = { ...exam, id: crypto.randomUUID(), date: new Date().toISOString() };
 
         const { error } = await supabase.from('examinations').insert([newExam]);
         if (error) throw error;
@@ -152,7 +153,7 @@ export const ClinicProvider = ({ children }) => {
     };
 
     const addPrescription = async (prescription) => {
-        const newPrescription = { ...prescription, status: 'pending' };
+        const newPrescription = { ...prescription, id: crypto.randomUUID(), status: 'pending' };
 
         const { error } = await supabase.from('prescriptions').insert([newPrescription]);
         if (error) throw error;
@@ -192,7 +193,7 @@ export const ClinicProvider = ({ children }) => {
     };
 
     const processPayment = async (payment) => {
-        const newTransaction = { ...payment, date: new Date().toISOString() };
+        const newTransaction = { ...payment, id: crypto.randomUUID(), date: new Date().toISOString() };
 
         const { error } = await supabase.from('transactions').insert([newTransaction]);
         if (error) throw error;
@@ -214,7 +215,8 @@ export const ClinicProvider = ({ children }) => {
 
     // Medicine Actions
     const addMedicine = async (medicine) => {
-        const { error } = await supabase.from('medicines').insert([medicine]);
+        const newMedicine = { ...medicine, id: crypto.randomUUID() };
+        const { error } = await supabase.from('medicines').insert([newMedicine]);
         if (error) throw error;
         await fetchData();
     };
@@ -264,7 +266,9 @@ export const ClinicProvider = ({ children }) => {
         addMedicine,
         updateMedicine,
         updateMedicineStock,
-        deleteMedicine
+        deleteMedicine,
+        searchQuery,
+        setSearchQuery
     };
 
     return (
