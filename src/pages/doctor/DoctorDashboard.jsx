@@ -117,7 +117,7 @@ const DoctorDashboard = () => {
                                 <div className="mt-6 flex gap-3">
                                     <Button
                                         className="w-full"
-                                        variant={activeExamItem ? "warning" : "primary"}
+                                        variant="primary"
                                         onClick={handleStartExamination}
                                     >
                                         <Activity size={18} className="mr-2" />
