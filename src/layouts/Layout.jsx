@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useClinic } from '../context/ClinicContext';
 import {
@@ -21,16 +21,155 @@ import {
 import { twMerge } from 'tailwind-merge';
 
 const Layout = () => {
-    const { user, logout, queue } = useClinic();
+    const {
+        user,
+        logout,
+        queue,
+        searchQuery,
+        setSearchQuery,
+        medicines,
+        patients,
+        transactions,
+        examinations
+    } = useClinic();
     const location = useLocation();
     const navigate = useNavigate();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-    const [searchQuery, setSearchQuery] = useState('');
+    const [suggestions, setSuggestions] = useState([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+
+    // Reset search on route change
+    useEffect(() => {
+        setSearchQuery('');
+        setShowSuggestions(false);
+    }, [location.pathname, setSearchQuery]);
+
+    useEffect(() => {
+        try {
+            if (!searchQuery || !searchQuery.trim()) {
+                setSuggestions([]);
+                return;
+            }
+
+            const query = searchQuery.toLowerCase();
+            let matches = [];
+
+            if (user?.role === 'pharmacy' && Array.isArray(medicines)) {
+                matches = medicines
+                    .filter(m => m && m.name && m.name.toLowerCase().includes(query))
+                    .slice(0, 5)
+                    .map(m => ({ type: 'medicine', ...m }));
+            } else if (user?.role === 'admin') {
+                // Prioritize active queue
+                const queueMatches = Array.isArray(queue) ? queue
+                    .filter(q => q && q.status !== 'completed' && q.patientName && q.patientName.toLowerCase().includes(query))
+                    .map(q => ({ type: 'queue', ...q })) : [];
+
+                // Then transactions
+                const transactionMatches = Array.isArray(transactions) ? transactions
+                    .filter(t => t && t.patientName && t.patientName.toLowerCase().includes(query))
+                    .map(t => ({ type: 'transaction', ...t })) : [];
+
+                matches = [...queueMatches, ...transactionMatches].slice(0, 5);
+            } else if (user?.role === 'doctor') {
+                // Prioritize waiting queue
+                const queueMatches = Array.isArray(queue) ? queue
+                    .filter(q => q && q.status === 'waiting')
+                    .map(q => {
+                        const patient = Array.isArray(patients) ? patients.find(p => p && p.id === q.patientId) : null;
+                        return { type: 'queue', ...q, patientName: patient?.name };
+                    })
+                    .filter(q => q && q.patientName && q.patientName.toLowerCase().includes(query)) : [];
+
+                // Then history
+                const patientMatches = Array.isArray(patients) ? patients
+                    .filter(p => p && p.name && p.name.toLowerCase().includes(query))
+                    .map(p => ({ type: 'patient', ...p })) : [];
+
+                matches = [...queueMatches, ...patientMatches].slice(0, 5);
+            }
+
+            setSuggestions(matches);
+        } catch (error) {
+            console.error("Error in search suggestions:", error);
+            setSuggestions([]);
+        }
+    }, [searchQuery, user, medicines, queue, transactions, patients]);
+
+    const handleSearch = (e) => {
+        if (e.key === 'Enter' && searchQuery && searchQuery.trim()) {
+            const query = searchQuery.toLowerCase();
+
+            if (user?.role === 'pharmacy') {
+                const found = Array.isArray(medicines) && medicines.some(m => m.name.toLowerCase().includes(query));
+                if (found) navigate('/pharmacy/inventory');
+            }
+            else if (user?.role === 'admin') {
+                // Check active queue first
+                const queueItem = Array.isArray(queue) && queue.find(q =>
+                    q.status !== 'completed' &&
+                    q.patientName.toLowerCase().includes(query)
+                );
+
+                if (queueItem) {
+                    navigate('/admin/queue', { state: { highlightId: queueItem.patientId } });
+                    return;
+                }
+
+                // Check transactions
+                const transaction = Array.isArray(transactions) && transactions.find(t =>
+                    t.patientName.toLowerCase().includes(query)
+                );
+
+                if (transaction) {
+                    navigate('/admin/transactions', { state: { highlightId: transaction.patientId } });
+                }
+            }
+            else if (user?.role === 'doctor') {
+                // Check waiting queue
+                const queueItem = Array.isArray(queue) && queue.find(q =>
+                    q.status === 'waiting' &&
+                    Array.isArray(patients) && patients.find(p => p.id === q.patientId)?.name.toLowerCase().includes(query)
+                );
+
+                if (queueItem) {
+                    navigate('/doctor/dashboard');
+                    return;
+                }
+
+                // Check patient history
+                const patient = Array.isArray(patients) && patients.find(p => p.name.toLowerCase().includes(query));
+                if (patient) {
+                    navigate('/doctor/history', { state: { patientId: patient.id } });
+                }
+            }
+        }
+    };
+
+    const handleSuggestionClick = (item) => {
+        setSearchQuery(item.name || item.patientName);
+        setShowSuggestions(false);
+
+        if (item.type === 'medicine') {
+            navigate('/pharmacy/inventory');
+        } else if (item.type === 'queue') {
+            if (user?.role === 'admin') {
+                navigate('/admin/queue', { state: { highlightId: item.patientId } });
+            } else {
+                navigate('/doctor/dashboard');
+            }
+        } else if (item.type === 'transaction') {
+            navigate('/admin/transactions', { state: { highlightId: item.patientId } });
+        } else if (item.type === 'patient') {
+            navigate('/doctor/history', { state: { patientId: item.id } });
+        }
+    };
 
     const handleLogout = () => {
         logout();
         navigate('/login');
     };
+
     const getNavItems = () => {
         switch (user?.role) {
             case 'admin':
@@ -58,7 +197,7 @@ const Layout = () => {
                 ];
             case 'doctor':
                 // Find active examination
-                const activeExam = queue?.find(q => q.status === 'examining');
+                const activeExam = Array.isArray(queue) ? queue.find(q => q.status === 'examining') : null;
                 const examPath = activeExam ? `/doctor/examination/${activeExam.id}` : '/doctor/examination';
 
                 return [
@@ -78,7 +217,6 @@ const Layout = () => {
                         items: [
                             { path: '/pharmacy/dashboard', label: 'Dashboard', icon: LayoutDashboard },
                             { path: '/pharmacy/prescription', label: 'Resep', icon: Pill },
-                            { path: '/pharmacy/inventory', label: 'Stok Obat', icon: Activity },
                         ]
                     }
                 ];
@@ -103,6 +241,18 @@ const Layout = () => {
                 <span>{label}</span>
             </Link>
         );
+    };
+
+    const getSearchPlaceholder = () => {
+        switch (user?.role) {
+            case 'pharmacy':
+                return "Cari obat...";
+            case 'admin':
+            case 'doctor':
+                return "Cari pasien...";
+            default:
+                return "Cari...";
+        }
     };
 
     return (
@@ -171,19 +321,41 @@ const Layout = () => {
                             <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary-400" />
                             <input
                                 type="text"
-                                placeholder="Cari pasien, dokter, atau obat..."
+                                placeholder={getSearchPlaceholder()}
                                 className="w-full pl-10 pr-4 py-2 bg-secondary-50 border border-secondary-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 focus:border-primary-500 transition-all"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
+                                onKeyDown={handleSearch}
+                                onFocus={() => setShowSuggestions(true)}
+                                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                             />
+
+                            {/* Search Suggestions */}
+                            {showSuggestions && Array.isArray(suggestions) && suggestions.length > 0 && (
+                                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-lg shadow-lg border border-secondary-100 py-2 z-50 animate-fade-in">
+                                    {suggestions.map((item, index) => (
+                                        <button
+                                            key={index}
+                                            className="w-full text-left px-4 py-2 hover:bg-secondary-50 transition-colors flex items-center justify-between group"
+                                            onClick={() => handleSuggestionClick(item)}
+                                        >
+                                            <span className="text-sm text-secondary-900 font-medium">
+                                                {item.name || item.patientName}
+                                            </span>
+                                            <span className="text-xs text-secondary-400 group-hover:text-primary-500 capitalize">
+                                                {item.type === 'queue' ? 'Antrian' :
+                                                    item.type === 'transaction' ? 'Transaksi' :
+                                                        item.type === 'medicine' ? 'Obat' : 'Pasien'}
+                                            </span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
 
                     <div className="flex items-center gap-4">
-                        <button className="relative p-2 text-secondary-400 hover:text-secondary-600 hover:bg-secondary-50 rounded-lg transition-colors">
-                            <Bell size={20} />
-                            <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-                        </button>
+
 
                         <div className="h-8 w-px bg-secondary-200 mx-2"></div>
 
@@ -201,7 +373,7 @@ const Layout = () => {
 
                 {/* Page Content */}
                 <main className="flex-1 overflow-y-auto p-4 lg:p-8">
-                    <div className="max-w-7xl mx-auto animate-fade-in">
+                    <div key={location.pathname} className="max-w-7xl mx-auto animate-fade-in">
                         <Outlet />
                     </div>
                 </main>

@@ -7,16 +7,16 @@ import { Badge } from '../../components/ui/Badge';
 import { Users, Clock, CreditCard, Activity, UserPlus, FileText, TrendingUp, DollarSign } from 'lucide-react';
 
 const AdminDashboard = () => {
-    const { patients, queue, transactions } = useClinic();
+    const { patients = [], queue = [], transactions = [] } = useClinic();
     const navigate = useNavigate();
 
     // Calculate Metrics
     const today = new Date().toISOString().split('T')[0];
-    const patientsToday = patients.filter(p => p.registeredAt.startsWith(today)).length;
-    const pendingPayments = queue.filter(q => q.status === 'payment');
+    const patientsToday = Array.isArray(patients) ? patients.filter(p => p.registeredAt?.startsWith(today)).length : 0;
+    const pendingPayments = Array.isArray(queue) ? queue.filter(q => q.status === 'payment') : [];
 
     // Calculate Revenue and Profit (Assuming 40% profit margin for demo)
-    const totalRevenue = transactions.reduce((sum, t) => sum + t.amount, 0);
+    const totalRevenue = Array.isArray(transactions) ? transactions.reduce((sum, t) => sum + (t.amount || 0), 0) : 0;
     const totalProfit = totalRevenue * 0.4;
 
     // Prepare Chart Data (Last 7 days)
@@ -32,8 +32,8 @@ const AdminDashboard = () => {
 
     const last7Days = getLast7Days();
     const chartData = last7Days.map(date => {
-        const dayTransactions = transactions.filter(t => t.date.startsWith(date));
-        const dayRevenue = dayTransactions.reduce((sum, t) => sum + t.amount, 0);
+        const dayTransactions = Array.isArray(transactions) ? transactions.filter(t => t.date?.startsWith(date)) : [];
+        const dayRevenue = dayTransactions.reduce((sum, t) => sum + (t.amount || 0), 0);
         return {
             date: new Date(date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
             revenue: dayRevenue,
@@ -99,29 +99,44 @@ const AdminDashboard = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Revenue & Profit Chart */}
                 <Card className="lg:col-span-2" title="Grafik Pendapatan & Keuntungan (7 Hari Terakhir)">
-                    <div className="h-64 flex items-end gap-4 mt-4 px-2">
-                        {chartData.map((data, index) => (
-                            <div key={index} className="flex-1 flex flex-col justify-end gap-1 group relative">
-                                {/* Tooltip */}
-                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-10 bg-secondary-900 text-white text-xs p-2 rounded shadow-lg whitespace-nowrap">
-                                    <p>Rev: Rp {data.revenue.toLocaleString('id-ID')}</p>
-                                    <p>Pft: Rp {data.profit.toLocaleString('id-ID')}</p>
-                                </div>
+                    <div className="relative h-64 mt-4">
+                        {/* Grid Lines */}
+                        <div className="absolute inset-0 flex flex-col justify-between text-xs text-secondary-400">
+                            <div className="border-b border-secondary-100 w-full h-0"></div>
+                            <div className="border-b border-secondary-100 w-full h-0"></div>
+                            <div className="border-b border-secondary-100 w-full h-0"></div>
+                            <div className="border-b border-secondary-100 w-full h-0"></div>
+                            <div className="border-b border-secondary-100 w-full h-0"></div>
+                        </div>
 
-                                {/* Revenue Bar */}
-                                <div
-                                    className="w-full bg-primary-200 rounded-t-sm hover:bg-primary-300 transition-all relative"
-                                    style={{ height: `${(data.revenue / maxRevenue) * 100}%` }}
-                                >
-                                    {/* Profit Bar (Overlay) */}
-                                    <div
-                                        className="absolute bottom-0 left-0 right-0 bg-primary-500 rounded-t-sm opacity-80"
-                                        style={{ height: `${(data.profit / data.revenue) * 100}%` }}
-                                    ></div>
+                        {/* Bars */}
+                        <div className="absolute inset-0 flex items-end justify-between gap-2 px-2 pt-6">
+                            {chartData.map((data, index) => (
+                                <div key={index} className="flex-1 flex flex-col justify-end gap-1 group relative h-full">
+                                    {/* Tooltip */}
+                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-10 bg-secondary-900 text-white text-xs p-2 rounded shadow-lg whitespace-nowrap">
+                                        <p>Rev: Rp {data.revenue.toLocaleString('id-ID')}</p>
+                                        <p>Pft: Rp {data.profit.toLocaleString('id-ID')}</p>
+                                    </div>
+
+                                    {/* Bar Container */}
+                                    <div className="w-full h-full flex items-end relative">
+                                        {/* Revenue Bar */}
+                                        <div
+                                            className="w-full bg-primary-200 rounded-t-sm hover:bg-primary-300 transition-all relative"
+                                            style={{ height: `${Math.max((data.revenue / maxRevenue) * 100, 2)}%` }} // Min height 2%
+                                        >
+                                            {/* Profit Bar (Overlay) */}
+                                            <div
+                                                className="absolute bottom-0 left-0 right-0 bg-primary-500 rounded-t-sm opacity-80"
+                                                style={{ height: `${data.revenue > 0 ? (data.profit / data.revenue) * 100 : 0}%` }}
+                                            ></div>
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-center text-secondary-500 mt-2">{data.date}</p>
                                 </div>
-                                <p className="text-xs text-center text-secondary-500 mt-2">{data.date}</p>
-                            </div>
-                        ))}
+                            ))}
+                        </div>
                     </div>
                     <div className="flex justify-center gap-6 mt-6">
                         <div className="flex items-center gap-2">
