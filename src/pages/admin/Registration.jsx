@@ -25,7 +25,7 @@ const Registration = () => {
             addToast('Pasien berhasil didaftarkan!', 'success');
             setFormData({ name: '', age: '', contact: '', complaint: '' });
         } catch (error) {
-            addToast('Gagal mendaftarkan pasien.', 'error');
+            addToast(error.message || 'Gagal mendaftarkan pasien.', 'error');
         } finally {
             setLoading(false);
         }

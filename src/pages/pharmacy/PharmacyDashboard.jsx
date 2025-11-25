@@ -40,8 +40,12 @@ const PharmacyDashboard = () => {
     const lowStockCount = medicines.filter(m => m.stock < 10).length;
 
     const handleComplete = async (id) => {
-        await completePrescription(id);
-        addToast('Resep selesai disiapkan!', 'success');
+        try {
+            await completePrescription(id);
+            addToast('Resep selesai disiapkan!', 'success');
+        } catch (error) {
+            addToast(error.message || 'Gagal menyelesaikan resep', 'error');
+        }
     };
 
     const handleSaveMedicine = async (e) => {
@@ -54,15 +58,19 @@ const PharmacyDashboard = () => {
             price: parseInt(currentMed.price)
         };
 
-        if (isEditing) {
-            await updateMedicine(currentMed.id, medData);
-            addToast('Obat berhasil diperbarui!', 'success');
-        } else {
-            await addMedicine(medData);
-            addToast('Obat baru berhasil ditambahkan!', 'success');
+        try {
+            if (isEditing) {
+                await updateMedicine(currentMed.id, medData);
+                addToast('Obat berhasil diperbarui!', 'success');
+            } else {
+                await addMedicine(medData);
+                addToast('Obat baru berhasil ditambahkan!', 'success');
+            }
+            setIsEditing(false);
+            setCurrentMed({ name: '', stock: '', unit: '', price: '' });
+        } catch (error) {
+            addToast(error.message || 'Gagal menyimpan data obat', 'error');
         }
-        setIsEditing(false);
-        setCurrentMed({ name: '', stock: '', unit: '', price: '' });
     };
 
     const handleEditClick = (med) => {
@@ -72,8 +80,12 @@ const PharmacyDashboard = () => {
 
     const handleDeleteClick = async (id) => {
         if (window.confirm('Yakin ingin menghapus obat ini?')) {
-            await deleteMedicine(id);
-            addToast('Obat dihapus.', 'info');
+            try {
+                await deleteMedicine(id);
+                addToast('Obat dihapus.', 'info');
+            } catch (error) {
+                addToast(error.message || 'Gagal menghapus obat', 'error');
+            }
         }
     };
 

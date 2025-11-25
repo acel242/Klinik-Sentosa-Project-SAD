@@ -14,24 +14,28 @@ const Prescription = () => {
     const completedPrescriptions = prescriptions.filter(p => p.status === 'completed');
 
     const handleProcessPrescription = async (prescription) => {
-        // Check stock first
-        for (const item of prescription.medicines) {
-            const med = medicines.find(m => m.id === item.id);
-            if (!med || med.stock < parseInt(item.amount)) {
-                addToast(`Stok ${item.name} tidak mencukupi!`, 'error');
-                return;
+        try {
+            // Check stock first
+            for (const item of prescription.medicines) {
+                const med = medicines.find(m => m.id === item.id);
+                if (!med || med.stock < parseInt(item.amount)) {
+                    addToast(`Stok ${item.name} tidak mencukupi!`, 'error');
+                    return;
+                }
             }
-        }
 
-        // Update stock
-        for (const item of prescription.medicines) {
-            const med = medicines.find(m => m.id === item.id);
-            await updateMedicineStock(item.id, med.stock - parseInt(item.amount));
-        }
+            // Update stock
+            for (const item of prescription.medicines) {
+                const med = medicines.find(m => m.id === item.id);
+                await updateMedicineStock(item.id, med.stock - parseInt(item.amount));
+            }
 
-        // Update status
-        await updatePrescriptionStatus(prescription.id, 'completed');
-        addToast('Resep berhasil diproses', 'success');
+            // Update status
+            await updatePrescriptionStatus(prescription.id, 'completed');
+            addToast('Resep berhasil diproses', 'success');
+        } catch (error) {
+            addToast(error.message || 'Gagal memproses resep', 'error');
+        }
     };
 
     return (

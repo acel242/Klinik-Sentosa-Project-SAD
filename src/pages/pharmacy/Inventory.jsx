@@ -21,9 +21,13 @@ const Inventory = () => {
     );
 
     const handleUpdateStock = async (id) => {
-        await updateMedicineStock(id, parseInt(editStock));
-        setEditingId(null);
-        addToast('Stok berhasil diperbarui', 'success');
+        try {
+            await updateMedicineStock(id, parseInt(editStock));
+            setEditingId(null);
+            addToast('Stok berhasil diperbarui', 'success');
+        } catch (error) {
+            addToast(error.message || 'Gagal memperbarui stok', 'error');
+        }
     };
 
     const handleAddMedicine = async () => {
@@ -32,15 +36,19 @@ const Inventory = () => {
             return;
         }
 
-        await addMedicine({
-            ...newMedicine,
-            stock: parseInt(newMedicine.stock),
-            price: parseInt(newMedicine.price)
-        });
+        try {
+            await addMedicine({
+                ...newMedicine,
+                stock: parseInt(newMedicine.stock),
+                price: parseInt(newMedicine.price)
+            });
 
-        setIsAdding(false);
-        setNewMedicine({ name: '', stock: '', unit: '', price: '' });
-        addToast('Obat baru berhasil ditambahkan', 'success');
+            setIsAdding(false);
+            setNewMedicine({ name: '', stock: '', unit: '', price: '' });
+            addToast('Obat baru berhasil ditambahkan', 'success');
+        } catch (error) {
+            addToast(error.message || 'Gagal menambahkan obat', 'error');
+        }
     };
 
     return (

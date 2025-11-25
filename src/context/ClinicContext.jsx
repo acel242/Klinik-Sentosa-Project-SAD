@@ -47,7 +47,7 @@ export const ClinicProvider = ({ children }) => {
                 supabase.from('examinations').select('*'),
                 supabase.from('prescriptions').select('*'),
                 supabase.from('transactions').select('*'),
-                supabase.from('medicines').select('*'),
+                supabase.from('medicines').select('*').order('name'),
             ]);
 
             if (p) setPatients(p);
@@ -87,7 +87,7 @@ export const ClinicProvider = ({ children }) => {
             return null;
         } catch (error) {
             console.error("Login error", error);
-            return false;
+            throw error;
         }
     };
 
@@ -100,25 +100,29 @@ export const ClinicProvider = ({ children }) => {
 
     // Data Actions
     const addPatient = async (patientData) => {
-        const newPatient = { ...patientData, id: Date.now().toString(), registeredAt: new Date().toISOString() };
+        const newPatient = { ...patientData, registeredAt: new Date().toISOString() };
 
         // 1. Add to Patients
-        const { error: pError } = await supabase.from('patients').insert([newPatient]);
-        if (pError) console.error("Error adding patient", pError);
+        const { data: savedPatient, error: pError } = await supabase
+            .from('patients')
+            .insert([newPatient])
+            .select()
+            .single();
+
+        if (pError) throw pError;
 
         // 2. Add to Queue
         const queueItem = {
-            id: Date.now().toString(),
-            patientId: newPatient.id,
-            patientName: newPatient.name,
+            patientId: savedPatient.id,
+            patientName: savedPatient.name,
             status: 'waiting',
             joinedAt: new Date().toISOString(),
         };
 
         const { error: qError } = await supabase.from('queue').insert([queueItem]);
-        if (qError) console.error("Error adding to queue", qError);
+        if (qError) throw qError;
 
-        fetchData(); // Refresh data
+        await fetchData(); // Refresh data
     };
 
     const updateQueueStatus = async (queueId, status) => {
@@ -127,30 +131,30 @@ export const ClinicProvider = ({ children }) => {
             .update({ status })
             .eq('id', queueId);
 
-        if (error) console.error("Error updating queue", error);
-        fetchData();
+        if (error) throw error;
+        await fetchData();
     };
 
     const addExamination = async (exam) => {
-        const newExam = { ...exam, id: Date.now().toString(), date: new Date().toISOString() };
+        const newExam = { ...exam, date: new Date().toISOString() };
 
         const { error } = await supabase.from('examinations').insert([newExam]);
-        if (error) console.error("Error adding examination", error);
+        if (error) throw error;
 
         // Move patient to payment regardless of prescription
         const queueItem = queue.find(q => q.patientId === exam.patientId && q.status === 'examining');
         if (queueItem) {
             await updateQueueStatus(queueItem.id, 'payment');
         } else {
-            fetchData();
+            await fetchData();
         }
     };
 
     const addPrescription = async (prescription) => {
-        const newPrescription = { ...prescription, id: Date.now().toString(), status: 'pending' };
+        const newPrescription = { ...prescription, status: 'pending' };
 
         const { error } = await supabase.from('prescriptions').insert([newPrescription]);
-        if (error) console.error("Error adding prescription", error);
+        if (error) throw error;
 
         // Deduct stock
         for (const med of prescription.medicines) {
@@ -161,31 +165,36 @@ export const ClinicProvider = ({ children }) => {
             }
         }
 
-        fetchData();
+        await fetchData();
+    };
+
+    const updatePrescriptionStatus = async (id, status) => {
+        const { error } = await supabase
+            .from('prescriptions')
+            .update({ status })
+            .eq('id', id);
+
+        if (error) throw error;
+        await fetchData();
     };
 
     const completePrescription = async (prescriptionId) => {
-        const { error } = await supabase
-            .from('prescriptions')
-            .update({ status: 'completed' })
-            .eq('id', prescriptionId);
-
-        if (error) console.error("Error completing prescription", error);
+        await updatePrescriptionStatus(prescriptionId, 'completed');
 
         const prescription = prescriptions.find(p => p.id === prescriptionId);
         if (prescription) {
             const queueItem = queue.find(q => q.patientId === prescription.patientId && q.status === 'pharmacy');
-            if (queueItem) await updateQueueStatus(queueItem.id, 'completed');
-        } else {
-            fetchData();
+            if (queueItem) {
+                await updateQueueStatus(queueItem.id, 'completed');
+            }
         }
-    }
+    };
 
     const processPayment = async (payment) => {
-        const newTransaction = { ...payment, id: Date.now().toString(), date: new Date().toISOString() };
+        const newTransaction = { ...payment, date: new Date().toISOString() };
 
         const { error } = await supabase.from('transactions').insert([newTransaction]);
-        if (error) console.error("Error processing payment", error);
+        if (error) throw error;
 
         const queueItem = queue.find(q => q.patientId === payment.patientId && q.status === 'payment');
         if (queueItem) {
@@ -198,15 +207,15 @@ export const ClinicProvider = ({ children }) => {
                 await updateQueueStatus(queueItem.id, 'completed');
             }
         } else {
-            fetchData();
+            await fetchData();
         }
     };
 
     // Medicine Actions
     const addMedicine = async (medicine) => {
-        const { error } = await supabase.from('medicines').insert([{ ...medicine, id: Date.now().toString() }]);
-        if (error) console.error("Error adding medicine", error);
-        fetchData();
+        const { error } = await supabase.from('medicines').insert([medicine]);
+        if (error) throw error;
+        await fetchData();
     };
 
     const updateMedicine = async (id, updates) => {
@@ -215,8 +224,12 @@ export const ClinicProvider = ({ children }) => {
             .update(updates)
             .eq('id', id);
 
-        if (error) console.error("Error updating medicine", error);
-        fetchData();
+        if (error) throw error;
+        await fetchData();
+    };
+
+    const updateMedicineStock = async (id, newStock) => {
+        await updateMedicine(id, { stock: newStock });
     };
 
     const deleteMedicine = async (id) => {
@@ -225,8 +238,8 @@ export const ClinicProvider = ({ children }) => {
             .delete()
             .eq('id', id);
 
-        if (error) console.error("Error deleting medicine", error);
-        fetchData();
+        if (error) throw error;
+        await fetchData();
     };
 
     const value = {
@@ -244,10 +257,12 @@ export const ClinicProvider = ({ children }) => {
         updateQueueStatus,
         addExamination,
         addPrescription,
+        updatePrescriptionStatus,
         completePrescription,
         processPayment,
         addMedicine,
         updateMedicine,
+        updateMedicineStock,
         deleteMedicine
     };
 
