@@ -263,6 +263,7 @@ export const ClinicProvider = ({ children }) => {
         processPayment,
         addMedicine,
         updateMedicine,
+        updateMedicineStock,
         deleteMedicine
     };
 
